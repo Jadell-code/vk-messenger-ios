@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -59,7 +59,7 @@ jobs:
           xcrun simctl io "${{ steps.simulator.outputs.device_id }}" screenshot demo.png
 
       - name: Upload demo screenshot
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: demo-screenshot
           path: demo.png
