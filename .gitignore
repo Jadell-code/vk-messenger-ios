@@ -1,0 +1,11 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+VKMessenger.xcodeproj/
+*.ipa
+*.dSYM.zip
+
+# Случайный вложенный git-репозиторий, не часть проекта
+VK/

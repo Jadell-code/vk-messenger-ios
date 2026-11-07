@@ -1,0 +1,66 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build for simulator
+        run: |
+          xcodebuild \
+            -project VKMessenger.xcodeproj \
+            -scheme VKMessenger \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Boot iOS Simulator
+        id: simulator
+        run: |
+          DEVICE_ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime in data["devices"].values():
+              for device in runtime:
+                  if "iPhone" in device["name"] and device.get("isAvailable", True):
+                      print(device["udid"])
+                      sys.exit(0)
+          sys.exit("No iPhone simulator found")
+          ')
+          echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
+      - name: Launch demo and capture screenshot
+        run: |
+          xcrun simctl install "${{ steps.simulator.outputs.device_id }}" \
+            build/Build/Products/Debug-iphonesimulator/VKMessenger.app
+          xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
+            com.example.messenger --demo
+          sleep 10
+          xcrun simctl io "${{ steps.simulator.outputs.device_id }}" screenshot demo.png
+
+      - name: Upload demo screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-screenshot
+          path: demo.png
+          if-no-files-found: error
