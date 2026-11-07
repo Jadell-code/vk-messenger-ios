@@ -1,5 +1,6 @@
 param(
     [string]$ClientId,
+    [string]$Scope = 'messages,offline',
     [switch]$Open
 )
 
@@ -27,12 +28,11 @@ if (-not $ClientId -or $ClientId -eq '0' -or $ClientId -notmatch '^\d+$') {
 }
 
 $redirect = 'https://oauth.vk.com/blank.html'
-$scope = 'messages,offline,photos,wall,groups,email'
 $url = 'https://oauth.vk.com/authorize' +
     '?client_id=' + [uri]::EscapeDataString($ClientId) +
     '&display=page' +
     '&redirect_uri=' + [uri]::EscapeDataString($redirect) +
-    '&scope=' + [uri]::EscapeDataString($scope) +
+    '&scope=' + [uri]::EscapeDataString($Scope) +
     '&response_type=token' +
     '&v=5.199' +
     '&revoke=1'

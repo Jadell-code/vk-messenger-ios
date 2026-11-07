@@ -280,6 +280,8 @@ xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
    .\scripts\vk-auth-url.ps1 -Open
    ```
 
+   Скрипт запрашивает только `messages,offline` — этого достаточно для проверки.
+
 3. Войди в VK и разреши доступ. Браузер перейдёт на
    `https://oauth.vk.com/blank.html#access_token=...`.
 4. Скопируй значение `access_token` из адресной строки.
