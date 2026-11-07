@@ -266,6 +266,37 @@ xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
 
 Если что-то не работает, смотри таблицу ошибок ниже.
 
+### Проверка доступа к VK API без Mac
+
+Если Mac нет, можно проверить, выдан ли приложению доступ к сообщениям, прямо из Windows.
+
+1. В настройках приложения VK добавь redirect URI `https://oauth.vk.com/blank.html`
+   (в дополнение к `vk<client_id>://authorize`). Если VK разрешает только один адрес,
+   используй `vk<client_id>://authorize` и скопируй токен из адресной строки до
+   перехода в приложение.
+2. Сгенерируй ссылку для входа:
+
+   ```powershell
+   .\scripts\vk-auth-url.ps1 -Open
+   ```
+
+3. Войди в VK и разреши доступ. Браузер перейдёт на
+   `https://oauth.vk.com/blank.html#access_token=...`.
+4. Скопируй значение `access_token` из адресной строки.
+5. Запусти проверку:
+
+   ```powershell
+   .\scripts\vk-smoke-test.ps1
+   ```
+
+   Скрипт скрыто запросит токен и проверит:
+   - `users.get`;
+   - `messages.getConversations`;
+   - `messages.getLongPollServer`.
+
+Если все три пункта OK — доступ к сообщениям есть. Если ошибка 7/15 — доступа нет,
+нужно запрашивать его у VK. Никому не передавай `access_token`.
+
 ### 4. Устройство и TestFlight
 
 **Бесплатный Apple ID (7 дней):**
