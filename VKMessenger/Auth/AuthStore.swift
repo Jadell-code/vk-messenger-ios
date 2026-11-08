@@ -1,6 +1,4 @@
-import AuthenticationServices
 import Observation
-import UIKit
 
 @Observable
 @MainActor
@@ -9,47 +7,79 @@ final class AuthStore {
     private(set) var isDemo = false
 
     private let keychain = KeychainStore()
-    private var webAuthSession: ASWebAuthenticationSession?
+    private let vkID = VKIDClient()
+    private var pendingAuth: PendingVKIDAuth?
+
+    private struct PendingVKIDAuth {
+        let state: String
+        let verifier: String
+    }
 
     init() {
-        if let saved = try? keychain.loadSession(), !saved.isExpired {
+        if let saved = try? keychain.loadSession(),
+           !saved.isExpired || saved.refreshToken != nil {
             session = saved
         }
     }
 
-    func signInWithVK() async throws {
-        guard AppConfig.isConfigured, let url = AppConfig.authURL else {
+    var isVKID: Bool {
+        session?.isVKID == true
+    }
+
+    func makeVKIDAuthURL() throws -> URL {
+        guard AppConfig.isConfigured else {
             throw AuthError.notConfigured
         }
 
-        let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
-            let webSession = ASWebAuthenticationSession(
-                url: url,
-                callbackURLScheme: AppConfig.redirectScheme
-            ) { callbackURL, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let callbackURL {
-                    continuation.resume(returning: callbackURL)
-                } else {
-                    continuation.resume(throwing: AuthError.invalidCallback)
-                }
-            }
+        let pkce = PKCE()
+        let state = PKCE.randomURLSafeString(byteCount: 32)
+        pendingAuth = PendingVKIDAuth(state: state, verifier: pkce.verifier)
 
-            webSession.presentationContextProvider = WebAuthPresentationProvider.shared
-            webSession.prefersEphemeralWebBrowserSession = false
-            webAuthSession = webSession
-
-            if !webSession.start() {
-                continuation.resume(throwing: AuthError.failedToStart)
-            }
+        guard let url = AppConfig.vkIDAuthURL(state: state, codeChallenge: pkce.challenge) else {
+            throw AuthError.failedToStart
         }
+        return url
+    }
 
-        let newSession = try VKSession.parse(callbackURL: callbackURL)
+    func completeVKIDSignIn(callbackURL: URL) async throws {
+        guard let pending = pendingAuth else {
+            throw AuthError.invalidCallback
+        }
+        pendingAuth = nil
+
+        let callback = try VKIDClient.parseCallback(callbackURL, expectedState: pending.state)
+        let newSession = try await vkID.exchange(
+            code: callback.code,
+            deviceID: callback.deviceID,
+            state: pending.state,
+            verifier: pending.verifier
+        )
+
         try keychain.saveSession(newSession)
         session = newSession
         isDemo = false
-        webAuthSession = nil
+    }
+
+    func cancelVKIDSignIn() {
+        pendingAuth = nil
+    }
+
+    func refreshSessionIfNeeded() async {
+        guard !isDemo,
+              let current = session,
+              current.isExpired,
+              current.refreshToken != nil
+        else {
+            return
+        }
+
+        do {
+            let updated = try await vkID.refresh(current)
+            try keychain.saveSession(updated)
+            session = updated
+        } catch {
+            // Оставляем старую сессию: сетевой сбой не должен разлогинивать.
+        }
     }
 
     func enterDemo() {
@@ -58,22 +88,11 @@ final class AuthStore {
     }
 
     func signOut() {
+        pendingAuth = nil
         if !isDemo {
             keychain.deleteSession()
         }
         session = nil
         isDemo = false
-    }
-}
-
-private final class WebAuthPresentationProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
-    static let shared = WebAuthPresentationProvider()
-
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)
-        return window ?? UIWindow()
     }
 }

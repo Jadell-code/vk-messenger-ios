@@ -5,6 +5,17 @@ struct ProfileView: View {
     let viewModel: ProfileViewModel
     let env: AppEnvironment
 
+    private var isVKID: Bool {
+        env.auth.session?.isVKID == true
+    }
+
+    private var modeTitle: String {
+        if env.auth.isDemo {
+            return "Демо"
+        }
+        return isVKID ? "VK ID" : "VK API"
+    }
+
     var body: some View {
         List {
             if let profile = viewModel.profile {
@@ -44,7 +55,15 @@ struct ProfileView: View {
                         Text(String(profile.id))
                     }
                     LabeledContent("Режим") {
-                        Text(env.auth.isDemo ? "Демо" : "VK API")
+                        Text(modeTitle)
+                    }
+                }
+
+                if isVKID {
+                    Section("Ограничение VK") {
+                        Text("Вход и профиль работают через VK ID. Доступ к сообщениям VK новым приложениям не выдаёт, поэтому чаты и лента показаны в демо-режиме.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } else if viewModel.isLoading {

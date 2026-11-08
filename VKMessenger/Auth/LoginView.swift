@@ -5,6 +5,8 @@ struct LoginView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var showVKIDLogin = false
+    @State private var authURL: URL?
 
     var body: some View {
         ZStack {
@@ -47,7 +49,7 @@ struct LoginView: View {
                                 ProgressView()
                                     .tint(Theme.accent)
                             }
-                            Text(isLoading ? "Входим…" : "Войти через VK")
+                            Text(isLoading ? "Входим…" : "Войти через VK ID")
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
@@ -69,8 +71,13 @@ struct LoginView: View {
                     }
                     .disabled(isLoading)
 
+                    Text("Откроется защищённая страница VK ID. Приложение получит имя, фото и ID профиля. Чаты и лента пока демонстрационные: VK не выдаёт новым приложениям доступ к сообщениям.")
+                        .font(.caption2)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.75))
+
                     if !AppConfig.isConfigured {
-                        Text("Укажи VK_CLIENT_ID в Config/Local.xcconfig, чтобы включить вход через VK.")
+                        Text("Укажи VK_CLIENT_ID в Config/Local.xcconfig, чтобы включить вход через VK ID.")
                             .font(.caption)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.white.opacity(0.8))
@@ -79,6 +86,14 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
+            }
+        }
+        .sheet(isPresented: $showVKIDLogin) {
+            if let authURL {
+                VKIDLoginView(authURL: authURL) { result in
+                    showVKIDLogin = false
+                    handle(result)
+                }
             }
         }
         .alert(
@@ -96,15 +111,33 @@ struct LoginView: View {
 
     private func signIn() {
         guard !isLoading else { return }
-        isLoading = true
-        Task {
-            do {
-                try await env.auth.signInWithVK()
-                env.didSignIn()
-            } catch {
-                errorMessage = error.localizedDescription
+        do {
+            authURL = try env.auth.makeVKIDAuthURL()
+            showVKIDLogin = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func handle(_ result: Result<URL, Error>) {
+        switch result {
+        case .success(let callbackURL):
+            isLoading = true
+            Task {
+                do {
+                    try await env.auth.completeVKIDSignIn(callbackURL: callbackURL)
+                    env.didSignIn()
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+                isLoading = false
             }
-            isLoading = false
+
+        case .failure(let error):
+            if let authError = error as? AuthError, case .cancelled = authError {
+                return
+            }
+            errorMessage = error.localizedDescription
         }
     }
 }

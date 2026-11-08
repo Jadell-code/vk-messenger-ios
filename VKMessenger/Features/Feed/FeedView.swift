@@ -3,10 +3,19 @@ import SwiftUI
 @MainActor
 struct FeedView: View {
     let viewModel: FeedViewModel
+    let showsDemoNotice: Bool
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
+                if showsDemoNotice {
+                    DemoModeNotice(
+                        title: "Демо-лента",
+                        message: "VK ID не даёт доступ к ленте, поэтому посты демонстрационные."
+                    )
+                    .padding(.horizontal, 12)
+                }
+
                 ForEach(viewModel.posts) { post in
                     FeedPostCard(post: post)
                         .onAppear {

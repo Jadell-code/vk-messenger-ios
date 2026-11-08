@@ -4,14 +4,42 @@ struct VKSession: Codable, Equatable {
     let accessToken: String
     let userId: Int
     let expiresAt: Date?
+    let refreshToken: String?
+    let deviceID: String?
+    let scope: String?
+    let authState: String?
+
+    init(
+        accessToken: String,
+        userId: Int,
+        expiresAt: Date?,
+        refreshToken: String? = nil,
+        deviceID: String? = nil,
+        scope: String? = nil,
+        authState: String? = nil
+    ) {
+        self.accessToken = accessToken
+        self.userId = userId
+        self.expiresAt = expiresAt
+        self.refreshToken = refreshToken
+        self.deviceID = deviceID
+        self.scope = scope
+        self.authState = authState
+    }
 
     static let demo = VKSession(accessToken: "demo", userId: 0, expiresAt: nil)
+
+    var isVKID: Bool {
+        refreshToken != nil || deviceID != nil
+    }
 
     var isExpired: Bool {
         guard let expiresAt else { return false }
         return expiresAt <= Date()
     }
 
+    /// Разбирает ответ старого implicit flow (`#access_token=...`).
+    /// Оставлен для совместимости с ранее сохранёнными Standalone-токенами.
     static func parse(callbackURL: URL) throws -> VKSession {
         guard let fragment = callbackURL.fragment, !fragment.isEmpty else {
             throw AuthError.invalidCallback
@@ -50,20 +78,23 @@ enum AuthError: LocalizedError {
     case cancelled
     case failedToStart
     case invalidCallback
+    case noRefreshToken
     case vk(error: String)
 
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Не указан VK_CLIENT_ID. Открой Config/Local.xcconfig и вставь client_id приложения VK."
+            return "Не указан VK_CLIENT_ID. Открой Config/Local.xcconfig и вставь client_id приложения VK ID."
         case .cancelled:
             return "Вход отменён."
         case .failedToStart:
-            return "Не удалось открыть страницу авторизации VK."
+            return "Не удалось открыть страницу авторизации VK ID."
         case .invalidCallback:
-            return "VK вернул некорректный ответ авторизации."
+            return "VK ID вернул некорректный ответ авторизации."
+        case .noRefreshToken:
+            return "Сессия VK ID истекла. Войди заново."
         case .vk(let error):
-            return "VK: \(error)"
+            return "VK ID: \(error)"
         }
     }
 }

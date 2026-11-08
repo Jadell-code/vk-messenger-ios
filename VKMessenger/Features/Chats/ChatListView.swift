@@ -18,6 +18,19 @@ struct ChatListView: View {
 
     var body: some View {
         List {
+            if env.isUsingDemoData {
+                Section {
+                    DemoModeNotice(
+                        title: env.auth.isVKID ? "Профиль подключён через VK ID" : "Демо-режим",
+                        message: env.auth.isVKID
+                            ? "VK не выдаёт новым приложениям доступ к сообщениям, поэтому чаты демонстрационные."
+                            : "Чаты и сообщения демонстрационные. Реальный VK API не подключён."
+                    )
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            }
+
             ForEach(filteredChats) { chat in
                 NavigationLink(value: chat) {
                     ChatRow(chat: chat)

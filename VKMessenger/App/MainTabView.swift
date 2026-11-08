@@ -12,7 +12,7 @@ struct MainTabView: View {
         self.env = env
         _chatListViewModel = State(initialValue: ChatListViewModel(api: env.api, realtime: env.realtime))
         _feedViewModel = State(initialValue: FeedViewModel(api: env.api))
-        _profileViewModel = State(initialValue: ProfileViewModel(api: env.api))
+        _profileViewModel = State(initialValue: ProfileViewModel(api: env.profileAPI))
     }
 
     var body: some View {
@@ -25,7 +25,7 @@ struct MainTabView: View {
             }
 
             NavigationStack {
-                FeedView(viewModel: feedViewModel)
+                FeedView(viewModel: feedViewModel, showsDemoNotice: env.isUsingDemoData)
             }
             .tabItem {
                 Label("Лента", systemImage: "newspaper.fill")

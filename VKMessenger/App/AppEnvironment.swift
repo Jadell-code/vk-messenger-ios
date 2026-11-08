@@ -9,6 +9,7 @@ final class AppEnvironment {
 
     private let realAPI = VKAPIClient()
     private let demoAPI = DemoAPIClient()
+    private let hybridAPI = HybridAPIClient()
 
     init() {
         // Позволяет запускать демо из CI/схемы Xcode:
@@ -22,16 +23,35 @@ final class AppEnvironment {
         if auth.isDemo {
             return demoAPI
         }
+        if auth.isVKID {
+            return hybridAPI
+        }
         return realAPI
+    }
+
+    var profileAPI: any VKAPI {
+        if auth.isDemo {
+            return demoAPI
+        }
+        return realAPI
+    }
+
+    /// VK ID даёт только профиль, поэтому чаты и лента берутся из демо-данных.
+    var isUsingDemoData: Bool {
+        auth.isDemo || auth.isVKID
     }
 
     func start() async {
         guard auth.session != nil, !auth.isDemo else { return }
+        await auth.refreshSessionIfNeeded()
+
+        // Для VK ID LongPoll недоступен: нет scope messages.
+        guard !auth.isVKID else { return }
         realtime.start(api: realAPI)
     }
 
     func didSignIn() {
-        guard !auth.isDemo else { return }
+        guard !auth.isDemo, !auth.isVKID else { return }
         realtime.start(api: realAPI)
     }
 
