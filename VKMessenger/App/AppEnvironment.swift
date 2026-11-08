@@ -63,6 +63,11 @@ final class AppEnvironment {
         realtime.start(api: realAPI)
     }
 
+    func refreshIfNeeded() async {
+        guard !auth.isDemo, auth.session?.isExpired == true else { return }
+        await auth.refreshSessionIfNeeded()
+    }
+
     func signOut() {
         realtime.stop()
         auth.signOut()

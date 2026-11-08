@@ -9,6 +9,7 @@ final class AuthStore {
     private let keychain = KeychainStore()
     private let vkID = VKIDClient()
     private var pendingAuth: PendingVKIDAuth?
+    private var isRefreshing = false
 
     private struct PendingVKIDAuth {
         let state: String
@@ -66,12 +67,16 @@ final class AuthStore {
 
     func refreshSessionIfNeeded() async {
         guard !isDemo,
+              !isRefreshing,
               let current = session,
               current.isExpired,
               current.refreshToken != nil
         else {
             return
         }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
 
         do {
             let updated = try await vkID.refresh(current)

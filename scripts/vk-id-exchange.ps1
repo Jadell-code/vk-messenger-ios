@@ -102,6 +102,22 @@ try {
     Write-Host "   FAIL: $($_.Exception.Message)" -ForegroundColor Red
 }
 
+Write-Host '4. VK ID refresh token...' -ForegroundColor Cyan
+try {
+    $refreshed = Invoke-RestMethod -Uri 'https://id.vk.ru/oauth2/auth' -Method Post -Body @{
+        grant_type = 'refresh_token'
+        refresh_token = $tokens.refresh_token
+        client_id = $ClientId
+        device_id = $query.device_id
+        state = $query.state
+    } -TimeoutSec 30
+    $rotated = if ($refreshed.refresh_token) { 'yes' } else { 'no' }
+    Write-Host "   OK: expires_in=$($refreshed.expires_in), refresh token rotated=$rotated" -ForegroundColor Green
+} catch {
+    $details = $_.ErrorDetails.Message
+    Write-Host "   FAIL: $($_.Exception.Message) $details" -ForegroundColor Red
+}
+
 Remove-Item -LiteralPath $statePath -Force
 Write-Host ''
 Write-Host 'Done. The access token was not printed.' -ForegroundColor Yellow

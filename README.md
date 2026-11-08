@@ -107,10 +107,15 @@
 | Запрос | Результат |
 |---|---|
 | Обмен кода VK ID на токен (PKCE) | OK |
+| Refresh token (`grant_type=refresh_token`) | OK, VK выдаёт новую пару токенов |
 | `id.vk.ru/oauth2/user_info` | OK, профиль возвращается |
 | `users.get` с токеном VK ID | OK |
 | `messages.getConversations` | **FAIL: ошибка 1051** |
 | Запрос `scope=messages` | VK ID молча выдаёт только `vkid.personal_info` |
+
+Refresh-запрос с `state` и `device_id` проверен отдельно: VK возвращает новую
+пару токенов, старый refresh token инвалидируется. Приложение сохраняет новую
+пару в Keychain.
 
 Ошибка 1051: `Method is not available for this profile type`. Это ограничение
 платформы, а не код приложения. Новые приложения VK ID не получают доступ к
@@ -325,7 +330,8 @@ xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
 - обмен кода на токен — OK;
 - `id.vk.ru/oauth2/user_info` — OK;
 - `users.get` — OK;
-- `messages.getConversations` — ошибка 1051.
+- `messages.getConversations` — ошибка 1051;
+- refresh token — OK, VK выдаёт новую пару токенов.
 
 Токен нигде не печатается.
 
