@@ -6,7 +6,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if env.auth.session != nil {
+            if env.isStarting {
+                ProgressView("Загружаем…")
+            } else if env.auth.session != nil {
                 MainTabView(env: env)
             } else {
                 LoginView()

@@ -16,7 +16,8 @@
 
 Приложение VK ID: **54882991** («Messenger iOS»), платформа Web, бизнес-профиль
 подтверждён. Авторизация VK ID 2.1 с PKCE уже работает: обмен кода на токен,
-`id.vk.ru/oauth2/user_info` и `users.get` проходят успешно.
+`id.vk.ru/oauth2/user_info` и `users.get` проходят успешно. Вход через VK ID
+реализован и в нативном iOS-приложении (`WKWebView` + PKCE).
 
 При вызове `messages.getConversations` с токеном VK ID возвращается ошибка:
 

@@ -11,12 +11,16 @@ final class AppEnvironment {
     private let demoAPI = DemoAPIClient()
     private let hybridAPI = HybridAPIClient()
 
+    private(set) var isStarting = false
+
     init() {
         // Позволяет запускать демо из CI/схемы Xcode:
         // xcrun simctl launch <device> com.example.messenger --demo
         if ProcessInfo.processInfo.arguments.contains("--demo") {
             auth.enterDemo()
         }
+
+        isStarting = auth.session?.isExpired == true && auth.session?.refreshToken != nil
     }
 
     var api: any VKAPI {
@@ -43,7 +47,11 @@ final class AppEnvironment {
 
     func start() async {
         guard auth.session != nil, !auth.isDemo else { return }
-        await auth.refreshSessionIfNeeded()
+
+        if isStarting {
+            await auth.refreshSessionIfNeeded()
+            isStarting = false
+        }
 
         // Для VK ID LongPoll недоступен: нет scope messages.
         guard !auth.isVKID else { return }
