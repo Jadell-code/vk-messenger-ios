@@ -38,6 +38,9 @@ $url = 'https://oauth.vk.com/authorize' +
     '&revoke=1'
 
 Write-Host ''
+Write-Host 'WARNING: this script is for legacy Standalone apps only.' -ForegroundColor Yellow
+Write-Host 'New VK ID apps must use .\scripts\vk-id-auth-url.ps1 instead.' -ForegroundColor Yellow
+Write-Host ''
 Write-Host 'Open this URL in your browser:' -ForegroundColor Cyan
 Write-Host $url
 Write-Host ''

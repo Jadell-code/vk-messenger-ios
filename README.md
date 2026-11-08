@@ -11,13 +11,17 @@
 
 Проект успешно собирается в GitHub Actions: workflow `iOS Build` проходит,
 приложение запускается в симуляторе в демо-режиме. Скриншот доступен в artifact
-`demo-screenshot`. Это подтверждает компиляцию и работу UI, но не проверяет
-реальный VK API.
+`demo-screenshot`.
+
+Создано реальное приложение VK ID (`client_id` = `54882991`). Проверено на
+Windows: OAuth 2.1 PKCE, обмен кода на токен, `user_info` и `users.get` работают.
+Но `messages.getConversations` возвращает ошибку **1051** — VK не выдаёт новым
+приложениям доступ к сообщениям. Подробности — в разделе «Ограничение VK API».
 
 Что ещё не проверено:
 
-- вход через реальный VK и доступ приложения к `messages.*`;
-- LongPoll с двумя аккаунтами;
+- интеграция VK ID в само iOS-приложение (сейчас — только скрипты);
+- LongPoll с двумя аккаунтами (заблокировано отсутствием `messages`);
 - установка на физический iPhone и TestFlight.
 
 Иконка приложения — временная заглушка, её нужно заменить перед релизом.
@@ -40,18 +44,22 @@
 - macOS + Xcode 16 **или** macOS-раннер GitHub Actions
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - Apple Developer Program — для запуска на устройстве и публикации
-- Зарегистрированное приложение VK с доступом к методам сообщений
+- Приложение VK ID (для входа и профиля). Доступ к `messages.*` у новых приложений
+  закрыт — см. раздел «Ограничение VK API»
 
 На Windows собрать iOS-приложение нельзя: SwiftUI-код можно редактировать, но сборка
 и запуск выполняются только на macOS.
 
 ## Быстрый старт
 
-1. Открой `Config/Local.xcconfig` и укажи client_id приложения VK:
+1. В `Config/Local.xcconfig` уже указан `client_id` созданного приложения VK ID:
 
    ```
-   VK_CLIENT_ID = 12345678
+   VK_CLIENT_ID = 54882991
    ```
+
+   Это приложение типа Web с redirect URI `http://localhost`. Оно даёт доступ
+   только к профилю (имя, фото, пол, дата рождения), почте и телефону.
 
 2. Сгенерируй проект и открой его в Xcode:
 
@@ -68,30 +76,75 @@
 
 ## Настройка приложения VK
 
-1. Зайди на [dev.vk.com](https://dev.vk.com) → «Мои приложения» → «Создать приложение».
-2. Тип приложения — **Standalone**.
-3. В настройках укажи redirect URI:
+Новые Standalone-приложения в `dev.vk.com` больше не создаются: VK перенёс их
+в сервис авторизации **VK ID** (`id.vk.ru`). Созданное приложение:
 
-   ```
-   vk<client_id>://authorize
-   ```
+- название: `Messenger iOS`;
+- ID приложения: `54882991`;
+- платформа: Web;
+- базовый домен: `localhost`;
+- доверенный redirect URL: `http://localhost`.
 
-   Например, для `client_id = 12345678`: `vk12345678://authorize`.
-   Схема должна совпадать с `CFBundleURLSchemes` в `Info.plist`
-   (там используется `vk$(VK_CLIENT_ID)`).
+В разделе «Доступы» у приложения доступны только:
 
-4. Проверь доступные scopes: `messages`, `offline`, `photos`, `wall`, `groups`, `email`.
-5. Для методов `messages.*` и LongPoll приложению нужен доступ к Messages API.
-   Если `messages.send` возвращает ошибку 7/15, запроси доступ через поддержку VK —
-   без этого клиент сообщений работать не будет.
+- личные данные (`vkid.personal_info`) — всегда;
+- почта (`email`) — опционально;
+- телефон (`phone`) — расширенный доступ.
+
+Ни `messages`, ни `wall`, ни `friends` в списке нет даже при подтверждённом
+бизнес-профиле.
+
+### Ограничение VK API
+
+Проверено практически 8 ноября 2026 года:
+
+| Запрос | Результат |
+|---|---|
+| Обмен кода VK ID на токен (PKCE) | OK |
+| `id.vk.ru/oauth2/user_info` | OK, профиль возвращается |
+| `users.get` с токеном VK ID | OK |
+| `messages.getConversations` | **FAIL: ошибка 1051** |
+| Запрос `scope=messages` | VK ID молча выдаёт только `vkid.personal_info` |
+
+Ошибка 1051: `Method is not available for this profile type`. Это ограничение
+платформы, а не код приложения. Новые приложения VK ID не получают доступ к
+сообщениям, поэтому полноценный сторонний VK-мессенджер через официальный API
+сейчас построить нельзя.
+
+Что можно сделать:
+
+1. Оставить приложение как MVP с демо-чатами и реальной авторизацией VK ID
+   (профиль, почта, телефон).
+2. Написать в `devsupport@corp.vk.com` и запросить доступ к `messages` для
+   бизнес-профиля. Решение VK, сроки и вероятность одобрения не гарантированы.
+3. Выбрать мессенджер с открытым API (Telegram, Matrix, Discord и т.п.) и
+   переиспользовать UI.
 
 ### Если VK требует VK ID вместо OAuth implicit flow
 
-Сейчас используется `https://oauth.vk.com/authorize` с `response_type=token`.
-Для новых приложений VK может требовать VK ID (OAuth 2.1 + PKCE). В этом случае
-нужно заменить `AuthStore.signInWithVK()` на VK ID SDK или реализовать PKCE-обмен
-кода на токен. Структура проекта это позволяет: токен всё равно сохраняется в
-`KeychainStore`, а остальной код работает с `VKSession`.
+Старый implicit flow (`https://oauth.vk.com/authorize` с `response_type=token`)
+с новым client_id возвращает `Security Error`. Для VK ID используется OAuth 2.1
+с PKCE:
+
+1. `https://id.vk.ru/authorize` с `response_type=code`, `code_challenge` и
+   `code_challenge_method=S256`.
+2. VK возвращает `code`, `state` и `device_id` на redirect URI.
+3. `POST https://id.vk.ru/oauth2/auth` с `grant_type=authorization_code`
+   обменивает код на `access_token`, `refresh_token` и `id_token`.
+4. Токен живёт 1 час, обновляется через `grant_type=refresh_token`.
+
+Готовые скрипты для Windows:
+
+```powershell
+.\scripts\vk-id-auth-url.ps1 -Open
+.\scripts\vk-id-exchange.ps1 -RedirectUrl "<URL из адресной строки>"
+```
+
+Для iOS-приложения VK ID требует платформу iOS и Universal Link на реальном
+домене (например, `https://example.com/vk-id`). Без домена и Apple Developer
+аккаунта этот шаг не завершить. Текущее приложение пока использует старый
+`AuthStore` с implicit flow; его нужно заменить на PKCE-обмен, когда появится
+домен и доступ к VK API.
 
 ## Демо-режим
 
@@ -224,80 +277,64 @@ xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
 Приватные репозитории расходуют минуты GitHub Actions; macOS-раннер считается
 с повышенным коэффициентом. Для публичного репозитория минуты бесплатны.
 
-### 3. Тест с реальным VK API
+### 3. Тест с реальным VK
 
-Это единственный уровень, который проверяет настоящую авторизацию и сообщения.
+Сейчас реальный VK проверяется в два этапа.
 
-1. Зарегистрируй приложение на [dev.vk.com](https://dev.vk.com) → «Мои приложения».
-2. Тип — **Standalone**. Скопируй `client_id`.
-3. В настройках приложения укажи redirect URI:
+**Этап A. Авторизация VK ID (работает).**
 
-   ```
-   vk<client_id>://authorize
-   ```
+На Windows, без Mac:
 
-   Для `client_id = 12345678` это `vk12345678://authorize`.
-4. В `Config/Local.xcconfig` укажи:
-
-   ```
-   VK_CLIENT_ID = 12345678
-   ```
-
-5. Перегенерируй проект и запусти:
-
-   ```bash
-   xcodegen generate
-   open VKMessenger.xcodeproj
-   ```
-
-6. Нажми «Войти через VK» — откроется страница VK. После входа приложение
-   вернётся по URL-схеме `vk<client_id>://authorize`.
-7. Проверь, что токен сохранился: закрой и снова открой приложение — вход
-   должен сохраниться.
-
-Проверка realtime (LongPoll) — нужен второй аккаунт:
-
-1. Запусти приложение на симуляторе, войди основным аккаунтом.
-2. Со второго аккаунта (браузер `vk.com` или телефон) напиши в личку.
-3. Сообщение должно появиться без pull-to-refresh, а в списке чатов —
-   обновиться последнее сообщение и счётчик.
-4. Начни печатать со второго аккаунта — в открытом чате появится «печатает».
-5. Прочитай сообщение — у отправителя должен обновиться статус прочтения.
-
-Если что-то не работает, смотри таблицу ошибок ниже.
-
-### Проверка доступа к VK API без Mac
-
-Если Mac нет, можно проверить, выдан ли приложению доступ к сообщениям, прямо из Windows.
-
-1. В настройках приложения VK добавь redirect URI `https://oauth.vk.com/blank.html`
-   (в дополнение к `vk<client_id>://authorize`). Если VK разрешает только один адрес,
-   используй `vk<client_id>://authorize` и скопируй токен из адресной строки до
-   перехода в приложение.
-2. Сгенерируй ссылку для входа:
+1. Сгенерируй ссылку и открой её:
 
    ```powershell
-   .\scripts\vk-auth-url.ps1 -Open
+   .\scripts\vk-id-auth-url.ps1 -Open
    ```
 
-   Скрипт запрашивает только `messages,offline` — этого достаточно для проверки.
-
-3. Войди в VK и разреши доступ. Браузер перейдёт на
-   `https://oauth.vk.com/blank.html#access_token=...`.
-4. Скопируй значение `access_token` из адресной строки.
-5. Запусти проверку:
+2. Войди в VK и нажми «Разрешить».
+3. Браузер перейдёт на `http://localhost/?code=...`. Скопируй весь URL из
+   адресной строки.
+4. Обменяй код на токен и проверь профиль:
 
    ```powershell
-   .\scripts\vk-smoke-test.ps1
+   .\scripts\vk-id-exchange.ps1 -RedirectUrl "<URL из адресной строки>"
    ```
 
-   Скрипт скрыто запросит токен и проверит:
-   - `users.get`;
-   - `messages.getConversations`;
-   - `messages.getLongPollServer`.
+Скрипт покажет:
 
-Если все три пункта OK — доступ к сообщениям есть. Если ошибка 7/15 — доступа нет,
-нужно запрашивать его у VK. Никому не передавай `access_token`.
+- обмен кода на токен — OK;
+- `id.vk.ru/oauth2/user_info` — OK;
+- `users.get` — OK;
+- `messages.getConversations` — ошибка 1051.
+
+Токен нигде не печатается.
+
+**Этап B. Сообщения и LongPoll (заблокировано VK).**
+
+Проверить `messages.*` и LongPoll не получится: VK ID не выдаёт scope `messages`.
+Если у тебя есть старый Standalone-токен с доступом к сообщениям, его можно
+проверить скриптом:
+
+```powershell
+.\scripts\vk-smoke-test.ps1
+```
+
+Скрипт скрыто запросит токен и проверит `users.get`,
+`messages.getConversations` и `messages.getLongPollServer`. Для токена VK ID
+второй и третий пункты вернут ошибку — это ожидаемо.
+
+**Что это значит для iOS-приложения.**
+
+Вход через VK ID в приложении ещё не подключён: текущий `AuthStore` использует
+старый implicit flow и с новым client_id не работает. Для полноценной проверки
+на iPhone нужны:
+
+1. Домен с HTTPS и Universal Link для платформы iOS в VK ID.
+2. Apple Developer аккаунт для Associated Domains.
+3. Доступ к `messages`, которого у новых приложений нет.
+
+Поэтому на данном этапе приложение проверяется в демо-режиме, а VK ID — через
+скрипты на Windows.
 
 ### 4. Устройство и TestFlight
 
@@ -317,8 +354,10 @@ xcrun simctl launch "${{ steps.simulator.outputs.device_id }}" \
 3. **Product → Archive** → **Distribute App** → App Store Connect.
 4. Загрузи сборку в TestFlight и добавь тестировщиков.
 
-Для реального устройства redirect URI и URL-схема менять не нужно: `Info.plist`
-уже содержит `vk$(VK_CLIENT_ID)`, а значение подставляется из `Local.xcconfig`.
+Для реального устройства текущая URL-схема `vk$(VK_CLIENT_ID)` не подойдёт:
+VK ID требует Universal Link на HTTPS-домене. Понадобится домен, файл
+`apple-app-site-association` и entitlement Associated Domains. Схема в
+`Info.plist` останется как запасной вариант для демо и старых Standalone-токенов.
 
 ### 5. Ручной smoke-чеклист
 
@@ -414,9 +453,11 @@ provisioning profile, App Store Connect API key). Их нельзя хранит
 3. **Guideline 4.8 (Login Services).** Если VK-вход — основной, Apple может
    потребовать добавить Sign in with Apple. Проверь актуальную формулировку перед
    ревью.
-4. **Доступ к VK API.** Без разрешения на `messages.*` и LongPoll приложение не
-   сможет работать как мессенджер. Это блокер, который нужно закрыть до разработки
-   релиза.
+4. **Доступ к VK API.** Проверено: VK ID не выдаёт `messages` новым приложениям,
+   `messages.getConversations` возвращает ошибку 1051. Без доступа к сообщениям и
+   LongPoll приложение не сможет работать как мессенджер. Это главный блокер,
+   который нужно закрыть до релиза (запрос в `devsupport@corp.vk.com` или смена
+   платформы).
 5. **Push-уведомления.** Для фоновых пушей нужен сервер: APNs + подписка на
    LongPoll/события VK. В MVP пуши не входят.
 6. **UGC и модерация (Guideline 1.2).** Для мессенджера и ленты Apple требует
@@ -431,7 +472,7 @@ provisioning profile, App Store Connect API key). Их нельзя хранит
 - Отправка фото/файлов, голосовые сообщения
 - Локальный кэш чатов и офлайн-очередь (SwiftData/GRDB)
 - Поиск по сообщениям, закреплённые чаты, папки
-- VK ID PKCE вместо implicit flow
+- Интеграция VK ID PKCE в приложение (сейчас VK ID проверен только скриптами)
 - Тесты сетевого слоя и моделей
 - Локализация (ru/en), Dynamic Type, VoiceOver
 - Модерация UGC, жалобы и блокировки для App Store
