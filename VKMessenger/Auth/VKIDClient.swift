@@ -122,6 +122,10 @@ struct VKIDClient {
             throw VKAPIError.http(http.statusCode)
         }
 
+        if let payload = try? decoder.decode(TokenErrorResponse.self, from: data) {
+            throw AuthError.vk(error: payload.errorDescription ?? payload.error)
+        }
+
         do {
             return try decoder.decode(TokenResponse.self, from: data)
         } catch {

@@ -80,6 +80,7 @@ final class AuthStore {
 
         do {
             let updated = try await vkID.refresh(current)
+            guard session?.accessToken == current.accessToken else { return }
             try keychain.saveSession(updated)
             session = updated
         } catch {
